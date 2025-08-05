@@ -4,7 +4,7 @@
   <name>pi_patrol</name>
   <version>0.1.0</version>
   <description>A ROS2 package for a security robot that uses a camera and YOLO for intruder detection and tracking.</description>
-  <maintainer email="matt.hayes13@yahoo.com">matt.hayes13</maintainer>
+  <maintainer email="matt.hayes13@yahoo.com">mhayes3</maintainer>
   <license>Apache License 2.0</license>
 
   <depend>rclpy</depend>

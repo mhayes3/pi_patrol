@@ -22,7 +22,7 @@ class RecorderNode(Node):
             String, '/intruder_alert', self.alert_callback, 10)
         
         # Recording settings
-        self.recording_duration = 10  # seconds
+        self.recording_duration = 7  # seconds
         self.recordings_dir = os.path.expanduser("~/tracking_recordings")
         self.temp_dir = "/tmp/tracking_temp"
         
@@ -146,12 +146,19 @@ class RecorderNode(Node):
     def convert_to_mp4(self, temp_file, final_file):
         """Convert AVI to MP4 using FFmpeg"""
         try:
+            # Strictly enforce 7 second duration in the output video
             cmd = [
                 'ffmpeg', '-y',  # -y to overwrite existing files
                 '-i', temp_file,
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '23',
+                '-pix_fmt', 'yuv420p',  # Required for compatibility
+                '-movflags', '+faststart',  # Optimize for web streaming
+                '-profile:v', 'baseline',  # Most compatible profile
+                '-level', '3.0',  # Compatibility level
+                '-an',  # No audio (since we don't have audio)
+                '-t', '7',  # Strictly limit to 7 seconds
                 final_file
             ]
             

@@ -6,9 +6,9 @@ import cv2
 import threading
 import time
 
-class CameraTest(Node):
+class CameraNode(Node):
     def __init__(self):
-        super().__init__('camera_test')
+        super().__init__('camera_node')
         self.publisher = self.create_publisher(Image, '/camera/image_raw', 10)
         self.bridge = CvBridge()
         
@@ -91,7 +91,7 @@ class CameraTest(Node):
 
 def main():
     rclpy.init()
-    node = CameraTest()
+    node = CameraNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
