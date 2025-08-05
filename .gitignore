@@ -1,0 +1,73 @@
+# ROS workspace directories
+build/
+install/
+log/
+devel/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+*.egg-info/
+dist/
+build/
+
+# C++
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+*.out
+*.app
+
+# IDE and Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Model files (if you want to exclude large model files)
+*.pt
+*.pth
+*.onnx
+*.trt
+
+# Video files (if you want to exclude test videos)
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# ROS specific
+*.bag
+*.orig
+*.rej
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Catkin
+.catkin_workspace
