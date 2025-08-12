@@ -9,7 +9,7 @@ if os.path.exists(venv_path) and venv_path not in sys.path:
 
 import rclpy
 from rclpy.node import Node
-from sensor_msgs.msg import Image
+from sensor_msgs.msg import Image, RegionOfInterest
 from std_msgs.msg import String
 from cv_bridge import CvBridge
 import cv2
@@ -26,7 +26,9 @@ class DetectionNode(Node):
         # Initialize YOLO model (nano version for better Pi performance)
         self.get_logger().info('Loading YOLO model...')
         self.model = YOLO('yolov8n.pt')  # Downloads automatically on first run
-        self.get_logger().info('YOLO model loaded successfully')
+        
+        #self.model.to('cpu') # Force CPU usage to avoid CUDA conflicts
+        self.get_logger().info('YOLO model loaded successfully on CPU')
         
         # ROS2 setup
         self.bridge = CvBridge()
@@ -34,6 +36,8 @@ class DetectionNode(Node):
             Image, '/camera/image_raw', self.image_callback, 10)
         self.detection_publisher = self.create_publisher(
             String, '/intruder_alert', 10)
+        self.bbox_publisher = self.create_publisher(
+            RegionOfInterest, 'detection/target_bbox', 10)
         
         # Detection settings
         self.target_classes = {0: 'person', 15: 'cat', 16: 'dog'}  # COCO class IDs
@@ -71,22 +75,35 @@ class DetectionNode(Node):
                                 alert_msg = String()
                                 alert_msg.data = f'INTRUDER_DETECTED: {class_name} at ({int(x1)},{int(y1)})'
                                 self.detection_publisher.publish(alert_msg)
-                            
+
+                                # Also follow the person
+                                bbox_msg = RegionOfInterest()
+                                bbox_msg.x_offset = int(x1)
+                                bbox_msg.y_offset = int(y1)
+                                bbox_msg.width = int(x2 - x1)
+                                bbox_msg.height = int(y2 - y1)
+                                self.bbox_publisher.publish(bbox_msg)
                             elif class_name in ['cat', 'dog']:
-                                self.get_logger().info(f'Animal detected: {class_name} - entering follow mode')
+                                self.get_logger().info(f'Animal detected: {class_name} - publishing bounding box for tracking.')
+                                bbox_msg = RegionOfInterest()
+                                bbox_msg.x_offset = int(x1)
+                                bbox_msg.y_offset = int(y1)
+                                bbox_msg.width = int(x2 - x1)
+                                bbox_msg.height = int(y2 - y1)
+                                self.bbox_publisher.publish(bbox_msg)
         
         except Exception as e:
             self.get_logger().error(f'Detection error: {e}')
 
-def main():
-    rclpy.init()
-    node = DetectionNode()
+def main(args=None):
+    rclpy.init(args=args)
+    detection_node = DetectionNode()
     try:
-        rclpy.spin(node)
+        rclpy.spin(detection_node)
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
+        detection_node.destroy_node()
         rclpy.shutdown()
 
 if __name__ == '__main__':

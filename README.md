@@ -1,85 +1,78 @@
 # Pi Patrol
 
-A ROS 2 package for Raspberry Pi-based security monitoring with motion detection, video recording, and Telegram notifications.
+A ROS 2 package for a security robot that uses a camera and YOLO for intruder detection and tracking.
 
-## Overview
+## Features
 
-Pi Patrol is a comprehensive security monitoring system built on ROS 2 that uses a Raspberry Pi camera to detect motion, record video evidence, and send notifications via Telegram. When an intruder is detected, the system records a 7-second video clip (including pre-motion buffer) and sends it directly to your Telegram account.
-
-## System Architecture
-
-Pi Patrol consists of four main nodes:
-
-1. **Camera Node**: Captures frames from the Raspberry Pi camera and publishes them to the `/camera/image_raw` topic
-2. **Detection Node**: Subscribes to camera frames, runs YOLO object detection, and publishes intruder alerts
-3. **Recorder Node**: Maintains a buffer of recent frames and records videos when an intruder is detected
-4. **Telegram Notifier Node**: Sends notifications and video evidence to Telegram when alerted
+- **Intruder Detection:** Uses a camera and YOLOv8 to detect persons, cats, and dogs.
+- **Video Recording:** Automatically records video when an intruder is detected.
+- **Telegram Notifications:** Sends alerts with video clips to a specified Telegram chat.
 
 ## Prerequisites
 
-- Raspberry Pi (tested on Raspberry Pi 4/5)
-- Raspberry Pi Camera Module
-- ROS 2 (tested on Humble)
-- Python 3.8+
-- OpenCV
-- FFmpeg
-- python-dotenv
-- Telegram Bot (see setup instructions below)
+- **Ubuntu 22.04**
+- **ROS 2 Jazzy:** Follow the official installation guide: [docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html)
 
-## Installation
+## Setup
 
-### 1. Clone the repository into your ROS 2 workspace
+### 1. Install System Dependencies
 
-```bash
-cd ~/your_ros2_workspace/src
-git clone https://github.com/mhayes3/pi_patrol.git
-```
-
-### 2. Install dependencies
+First, install the necessary ROS 2 packages and system tools:
 
 ```bash
 sudo apt update
-sudo apt install -y ffmpeg python3-opencv python3-pip
-pip3 install python-dotenv requests
+sudo apt install -y ros-jazzy-cv-bridge ros-jazzy-image-transport python3-pip python3.12-venv ffmpeg
 ```
 
-### 3. Create your .env file
-
-Create a `.env` file in the workspace root or in the package directory:
+### 2. (Optional) Create a Python virtual environment
 
 ```bash
-cd ~/your_ros2_workspace
-cp src/pi_patrol/.env.example .env
+python3 -m venv ~/ros_ml_env
+source ~/ros_ml_env/bin/activate
+pip install --upgrade pip
 ```
 
-Edit the `.env` file to add your Telegram credentials:
+### 3. Install Python Dependencies
+
+Install the necessary Python libraries using the provided `requirements.txt` file.
+
+```bash
+pip install -r requirements.txt
+```
+
+> **Note:** This project requires specific versions of `numpy` (< 2.0) and `opencv-python` (< 4.9) to be compatible with the version of `cv_bridge` used in ROS 2 Jazzy. The `requirements.txt` file enforces these versions to prevent potential build or runtime errors.
+
+### 4. Configure Telegram and .env
+
+Set up a Telegram bot and add your credentials:
+
+- Create a bot via @BotFather and copy the bot token
+- Get your chat ID via @userinfobot
+- Create the `.env` file (use the example if available):
+
+```bash
+cp src/pi_patrol/.env.example src/pi_patrol/.env  # if the example exists
+```
+
+Add these to `src/pi_patrol/.env`:
 
 ```
 TELEGRAM_BOT_TOKEN=your_bot_token_here
 TELEGRAM_CHAT_ID=your_chat_id_here
 ```
 
-### 4. Build the package
+### 5. Build the ROS 2 Workspace
+
+From the root of your project, build the workspace:
 
 ```bash
-cd ~/your_ros2_workspace
-colcon build --packages-select pi_patrol
-source install/setup.bash
+colcon build
 ```
-
-## Telegram Bot Setup
-
-1. Create a new Telegram bot by messaging [@BotFather](https://t.me/botfather) on Telegram
-2. Follow the instructions to create a new bot and receive your bot token
-3. Start a conversation with your bot
-4. Get your chat ID by messaging [@userinfobot](https://t.me/userinfobot)
-5. Update your `.env` file with the bot token and chat ID
 
 ## Usage
 
-### Launch all nodes
-
 ```bash
+source install/setup.bash
 ros2 launch pi_patrol pi_patrol.launch.py
 ```
 
