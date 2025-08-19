@@ -15,6 +15,7 @@ from cv_bridge import CvBridge
 import cv2
 from ultralytics import YOLO
 import numpy as np
+import time
 
 class DetectionNode(Node):
     def __init__(self):
@@ -34,6 +35,9 @@ class DetectionNode(Node):
         self.bridge = CvBridge()
         self.subscription = self.create_subscription(
             Image, '/camera/image_raw', self.image_callback, 10)
+        # Listen for arm/disarm commands via server command channel
+        self.command_subscription = self.create_subscription(
+            String, '/server/command', self.on_command, 10)
         self.detection_publisher = self.create_publisher(
             String, '/intruder_alert', 10)
         self.bbox_publisher = self.create_publisher(
@@ -42,11 +46,21 @@ class DetectionNode(Node):
         # Detection settings
         self.target_classes = {0: 'person', 15: 'cat', 16: 'dog'}  # COCO class IDs
         self.confidence_threshold = 0.5
+        self.alert_cooldown_sec = 10.0
+        self.last_person_alert_ts = 0.0
+        
+        # Armed state (default disarmed). Can be set at launch via param 'armed_on_start'
+        self.declare_parameter('armed_on_start', False)
+        self.armed = bool(self.get_parameter('armed_on_start').value)
         
         self.get_logger().info('Detection node initialized')
     
     def image_callback(self, msg):
         try:
+            # Skip processing if not armed to save CPU
+            if not self.armed:
+                return
+            
             # Convert ROS image to OpenCV
             cv_image = self.bridge.imgmsg_to_cv2(msg, 'bgr8')
             
@@ -72,9 +86,14 @@ class DetectionNode(Node):
                             
                             # Publish alert for person detection
                             if class_name == 'person':
-                                alert_msg = String()
-                                alert_msg.data = f'INTRUDER_DETECTED: {class_name} at ({int(x1)},{int(y1)})'
-                                self.detection_publisher.publish(alert_msg)
+                                now = time.time()
+                                if now - self.last_person_alert_ts >= self.alert_cooldown_sec:
+                                    self.last_person_alert_ts = now
+                                    alert_msg = String()
+                                    alert_msg.data = f'INTRUDER_DETECTED: {class_name} at ({int(x1)},{int(y1)})'
+                                    self.detection_publisher.publish(alert_msg)
+                                else:
+                                    self.get_logger().debug('Person detected but alert suppressed due to cooldown')
 
                                 # Also follow the person
                                 bbox_msg = RegionOfInterest()
@@ -94,6 +113,18 @@ class DetectionNode(Node):
         
         except Exception as e:
             self.get_logger().error(f'Detection error: {e}')
+
+    def on_command(self, msg: String):
+        try:
+            cmd = (msg.data or '').strip().lower()
+            if cmd == 'arm':
+                self.armed = True
+                self.get_logger().info('Detection armed')
+            elif cmd == 'disarm':
+                self.armed = False
+                self.get_logger().info('Detection disarmed')
+        except Exception:
+            pass
 
 def main(args=None):
     rclpy.init(args=args)

@@ -74,3 +74,7 @@ Makefile
 
 # Secret
 .env
+
+# Custom
+launch_single_instance.sh
+requirements.txt

@@ -45,6 +45,19 @@ def generate_launch_description():
         emulate_tty=True,
     )
 
+    # Server node for commands and MediaMTX streaming
+    server_node = Node(
+        package='pi_patrol',
+        executable='server_node',
+        name='server_node',
+        output='screen',
+        emulate_tty=True,
+        parameters=[
+            {'port': 8080},
+            {'mediamtx_url': 'rtsp://localhost:8554/pi_patrol'}
+        ],
+    )
+
     # # Node for motor control
     # motor_control_node = Node(
     #     package='pi_patrol',
@@ -93,6 +106,7 @@ def generate_launch_description():
         detection_node,
         recorder_node,
         telegram_notifier_node,
+        server_node,
         # motor_control_node,
         # follow_target_node,
         # gazebo_launch,

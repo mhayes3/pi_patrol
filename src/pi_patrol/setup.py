@@ -25,6 +25,7 @@ setup(
         'detection_node = pi_patrol.detection_node:main',
         'recorder_node = pi_patrol.recorder_node:main',
         'telegram_notifier_node = pi_patrol.telegram_notifier_node:main',
+        'server_node = pi_patrol.server_node:main',
         #'motor_control_node = pi_patrol.motor_control_node:main',
         #'follow_target_node = pi_patrol.follow_target_node:main',
         ],

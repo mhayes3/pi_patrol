@@ -1,6 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import String
+from std_msgs.msg import String, Bool
 import requests
 import json
 import os
@@ -85,6 +85,10 @@ class TelegramNotifier(Node):
         # ROS2 setup
         self.alert_subscription = self.create_subscription(
             String, '/intruder_alert', self.alert_callback, 10)
+        # Listen for notifications enabled/disabled
+        self.notifications_enabled = True
+        self.notifications_subscription = self.create_subscription(
+            Bool, '/notifications_enabled', self.notifications_callback, 10)
         
         # Notification settings
         # Use environment variable for recordings directory if set, otherwise use default
@@ -96,6 +100,24 @@ class TelegramNotifier(Node):
         
         # Test connection
         self.test_connection()
+        
+        # One-shot timer handle and sent videos registry
+        self.pending_video_timer = None
+        self.sent_videos = set()
+
+    def notifications_callback(self, msg: Bool):
+        try:
+            self.notifications_enabled = bool(msg.data)
+            self.get_logger().info(f'Notifications enabled set to {self.notifications_enabled}')
+            # If disabled, cancel any pending video send
+            if not self.notifications_enabled and self.pending_video_timer is not None:
+                try:
+                    self.pending_video_timer.cancel()
+                except Exception:
+                    pass
+                self.pending_video_timer = None
+        except Exception as e:
+            self.get_logger().error(f'Error handling notifications toggle: {e}')
     
     def test_connection(self):
         """Test Telegram bot connection"""
@@ -160,6 +182,18 @@ class TelegramNotifier(Node):
         """Handle intruder alerts"""
         current_time = datetime.now()
         
+        # Respect notifications toggle
+        if not self.notifications_enabled:
+            self.get_logger().info('Notifications disabled; skipping alert handling')
+            # Ensure no pending sends remain
+            if self.pending_video_timer is not None:
+                try:
+                    self.pending_video_timer.cancel()
+                except Exception:
+                    pass
+                self.pending_video_timer = None
+            return
+        
         # Check cooldown to avoid spam
         if current_time.timestamp() - self.last_notification_time < self.notification_cooldown:
             self.get_logger().info('Notification skipped due to cooldown')
@@ -185,8 +219,30 @@ class TelegramNotifier(Node):
                 self.get_logger().info('Intruder alert sent to Telegram')
             
             # Schedule video sending after recording completes
-            # (We'll wait a bit for the recording to finish)
-            self.create_timer(15.0, lambda: self.send_latest_video(timestamp))
+            # (We'll wait a bit for the recording to finish) one-shot
+            if self.pending_video_timer is not None:
+                try:
+                    self.pending_video_timer.cancel()
+                except Exception:
+                    pass
+                self.pending_video_timer = None
+            def _send_once():
+                try:
+                    # cancel so it only fires once
+                    if self.pending_video_timer is not None:
+                        try:
+                            self.pending_video_timer.cancel()
+                        except Exception:
+                            pass
+                        self.pending_video_timer = None
+                    # Only send if notifications are enabled at fire time
+                    if self.notifications_enabled:
+                        self.send_latest_video(timestamp)
+                    else:
+                        self.get_logger().info('Notifications disabled at timer fire; not sending video')
+                except Exception as e:
+                    self.get_logger().error(f'Error in scheduled video send: {e}')
+            self.pending_video_timer = self.create_timer(15.0, _send_once)
     
     def is_valid_video(self, video_path):
         """Check if video is valid (not empty and has content)"""
@@ -235,6 +291,9 @@ class TelegramNotifier(Node):
     def send_latest_video(self, timestamp):
         """Send the latest recorded video"""
         try:
+            if not self.notifications_enabled:
+                self.get_logger().info('Notifications disabled; not sending latest video')
+                return
             # Find the most recent video file
             video_files = [f for f in os.listdir(self.recordings_dir) if f.endswith('.mp4')]
             if video_files:
@@ -243,9 +302,13 @@ class TelegramNotifier(Node):
                 video_path = os.path.join(self.recordings_dir, latest_video)
                 
                 # Validate video before sending
+                if video_path in self.sent_videos:
+                    self.get_logger().info(f'Skipping already-sent video: {video_path}')
+                    return
                 if self.is_valid_video(video_path):
                     caption = f"🎥 Intruder recording from {timestamp}"
-                    self.send_video(video_path, caption)
+                    if self.send_video(video_path, caption):
+                        self.sent_videos.add(video_path)
                 else:
                     self.get_logger().warn(f'Skipping invalid or blank video: {video_path}')
                     self.send_message(f"⚠️ Alert: Motion detected, but recording failed or was too short.")

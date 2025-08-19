@@ -22,7 +22,9 @@ class RecorderNode(Node):
             String, '/intruder_alert', self.alert_callback, 10)
         
         # Recording settings
-        self.recording_duration = 7  # seconds
+        # Total recording will be pre_record_seconds + post_record_seconds (default 2s + 5s = 7s)
+        self.pre_record_seconds = 2
+        self.post_record_seconds = 5
         self.recordings_dir = os.path.expanduser("~/tracking_recordings")
         self.temp_dir = "/tmp/tracking_temp"
         
@@ -34,9 +36,11 @@ class RecorderNode(Node):
         self.is_recording = False
         self.current_writer = None
         self.recording_start_time = None
+        self.recording_end_time = None
         self.frame_buffer = []
         self.buffer_lock = threading.Lock()
-        self.max_buffer_size = 150  # ~5 seconds at 30fps
+        # Keep a generous buffer; we will select frames by timestamp for pre-roll
+        self.max_buffer_size = 200
         
         # Video settings
         self.fps = 10
@@ -60,8 +64,8 @@ class RecorderNode(Node):
             if self.is_recording and self.current_writer is not None:
                 self.current_writer.write(cv_image)
                 
-                # Check if recording duration reached
-                if time.time() - self.recording_start_time >= self.recording_duration:
+                # Check if post-recording period reached
+                if self.recording_end_time is not None and time.time() >= self.recording_end_time:
                     self.stop_recording()
         
         except Exception as e:
@@ -97,17 +101,22 @@ class RecorderNode(Node):
                 return
             
             self.is_recording = True
-            self.recording_start_time = time.time()
+            now = time.time()
+            self.recording_start_time = now - self.pre_record_seconds
+            self.recording_end_time = now + self.post_record_seconds
             self.temp_filename = temp_filename
             self.final_filename = final_filename
             
-            # Write buffered frames (pre-recording)
+            # Write buffered frames from the last pre_record_seconds
+            cutoff_time = now - self.pre_record_seconds
+            pre_count = 0
             with self.buffer_lock:
-                self.get_logger().info(f'Writing {len(self.frame_buffer)} buffered frames')
-                for frame, timestamp in self.frame_buffer:
-                    # Resize frame if needed
-                    frame_resized = cv2.resize(frame, (self.frame_width, self.frame_height))
-                    self.current_writer.write(frame_resized)
+                for frame, ts in self.frame_buffer:
+                    if ts >= cutoff_time:
+                        frame_resized = cv2.resize(frame, (self.frame_width, self.frame_height))
+                        self.current_writer.write(frame_resized)
+                        pre_count += 1
+            self.get_logger().info(f'Wrote {pre_count} pre-roll frames (~{self.pre_record_seconds}s) and started live recording for {self.post_record_seconds}s')
             
             self.get_logger().info(f'Started recording: {final_filename}')
         
@@ -137,8 +146,8 @@ class RecorderNode(Node):
             conversion_thread.daemon = True
             conversion_thread.start()
             
-            duration = time.time() - self.recording_start_time
-            self.get_logger().info(f'Recording stopped. Duration: {duration:.1f} seconds')
+            duration = self.pre_record_seconds + self.post_record_seconds
+            self.get_logger().info(f'Recording stopped. Duration (approx): {duration:.1f} seconds')
         
         except Exception as e:
             self.get_logger().error(f'Error stopping recording: {e}')
@@ -148,17 +157,16 @@ class RecorderNode(Node):
         try:
             # Strictly enforce 7 second duration in the output video
             cmd = [
-                'ffmpeg', '-y',  # -y to overwrite existing files
+                'ffmpeg', '-y',
                 '-i', temp_file,
                 '-c:v', 'libx264',
                 '-preset', 'fast',
                 '-crf', '23',
-                '-pix_fmt', 'yuv420p',  # Required for compatibility
-                '-movflags', '+faststart',  # Optimize for web streaming
-                '-profile:v', 'baseline',  # Most compatible profile
-                '-level', '3.0',  # Compatibility level
-                '-an',  # No audio (since we don't have audio)
-                '-t', '7',  # Strictly limit to 7 seconds
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+                '-profile:v', 'baseline',
+                '-level', '3.0',
+                '-an',
                 final_file
             ]
             
