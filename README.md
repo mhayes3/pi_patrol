@@ -7,7 +7,7 @@
 > - [ ] Add node for motor controls
 > - [ ] Add missing requirements.txt
 > - [ ] Fix api endpoint for retreiving recorded video clips
-> - [ ] 
+
 
 ## What is this?
 
