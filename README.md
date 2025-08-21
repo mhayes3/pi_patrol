@@ -1,10 +1,21 @@
 # Pi Patrol
 
+
+> 🚧 Under construction 🚧 
+>
+>   TODO:
+> - [ ] Add node for motor controls
+> - [ ] Add missing requirements.txt
+> - [ ] Fix api endpoint for retreiving recorded video clips
+> - [ ] 
+
+## What is this?
+
 A ROS 2 package for a security robot that uses a camera and YOLO for intruder detection and tracking.
 
 ## Features
 
-- **Intruder Detection:** Uses a camera and YOLOv8 to detect persons, cats, and dogs.
+- **Intruder Detection:** Uses a camera and YOLOv8 to detect people and pets.
 - **Video Recording:** Automatically records video when an intruder is detected.
 - **Telegram Notifications:** Sends alerts with video clips to a specified Telegram chat.
 
@@ -75,6 +86,9 @@ colcon build
 source install/setup.bash
 ros2 launch pi_patrol pi_patrol.launch.py
 ```
+
+To enable detection you'll need to arm the robot via the /mode endpoint and set the mode to armed.
+
 
 ### Run individual nodes
 
